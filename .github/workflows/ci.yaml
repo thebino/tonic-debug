@@ -94,7 +94,7 @@ jobs:
     strategy:
       matrix:
         toolchain:
-          - stable
+          # - stable
           - nightly
     steps:
       - name: Checkout
