@@ -1,5 +1,7 @@
 # tonic-debug
 
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/thebino/tonic-debug/ci.yaml?style=for-the-badge)
+[![License](https://img.shields.io/github/license/thebino/tonic-debug?style=for-the-badge)](./LICENSE-APACHE.md)
 A debugging and diagnostics middleware for [tonic](https://github.com/hyperium/tonic) gRPC servers.
 
 ## Problem
@@ -148,12 +150,17 @@ tonic-debug = { version = "0.1", features = ["opentelemetry"] }
 | `DEBUG` | Headers, custom metadata, response frames, protobuf fields|
 | `TRACE` | Stream completion summaries                               |
 
-## Future Plans
 
-- Web dashboard for live request/response inspection
-- Record/replay mechanism for gRPC calls
-- Request body inspection (buffering inbound streams)
 
-## License
+## 🏛️ License
 
-MIT
+Licensed under either of:
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+## 🧩 Contribution
+
+This is a free and open project and lives from contributions of the community.
+
+See our [Contribution Guide](CONTRIBUTING.md)
