@@ -1,6 +1,49 @@
 [package]
+authors = ["Stürmer, Benjamin <benjamin@stuermer.pro>"]
+repository = "https://github.com/tonic-debug"
 name = "tonic-debug"
 version = "0.1.0"
-edition = "2021"
+readme = "README.md"
+edition = "2024"
+description = "A debugging and diagnostics middleware for tonic gRPC servers"
+license = "Apache-2.0"
+keywords = ["grpc", "tonic", "debug", "tracing", "tower"]
+categories = ["development-tools::debugging", "network-programming"]
+
+[features]
+default = []
+opentelemetry = [
+    "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
+    "dep:tracing-opentelemetry",
+]
 
 [dependencies]
+# gRPC / HTTP stack
+tonic = "0.14"
+tower = "0.5"
+tower-layer = "0.3"
+tower-service = "0.3"
+hyper = "1"
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+
+# Byte manipulation
+bytes = "1"
+
+# Async / pin projection
+pin-project-lite = "0.2"
+tokio = { version = "1", features = ["sync", "time"] }
+
+# Logging
+tracing = "0.1"
+
+# OpenTelemetry (optional)
+opentelemetry = { version = "0.31", optional = true }
+opentelemetry_sdk = { version = "0.31", optional = true }
+tracing-opentelemetry = { version = "0.32", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
