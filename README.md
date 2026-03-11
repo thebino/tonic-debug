@@ -1,38 +1,159 @@
 # tonic-debug
 
-Developer-focused debugging utilities for gRPC services built with `tonic`.
+A debugging and diagnostics middleware for [tonic](https://github.com/hyperium/tonic) gRPC servers.
 
-This crate aims to make gRPC issues easier to investigate by providing a composable `tower::Layer` ("DebugLayer") that can:
+## Problem
 
-- Log gRPC method, metadata, and status codes
-- Render protobuf request/response bodies in human-readable formats (e.g. pretty JSON) using reflection/descriptor sets
-- Limit logged body size to avoid noisy logs (`max_body_log_bytes`)
-- Integrate cleanly with `tracing` (and optionally OpenTelemetry via feature flags)
+Debugging gRPC services built with tonic is hard:
 
-## Status
+- Messages are binary-encoded protobufs — not human-readable
+- Connection issues between clients and servers are opaque
+- Standard logging lacks the detail needed to quickly diagnose problems
 
-Early PoC (work in progress). APIs may change.
+## Solution
 
-## Non-goals (for now)
+`tonic-debug` is a Tower middleware that slots into your tonic server and provides:
 
-- Wire-level HTTP/2 frame dumps
-- Full request capture/replay tooling
-- Debug UI/dashboard
+- **Human-readable protobuf inspection** — decodes protobuf wire format without needing `.proto` schemas, showing field numbers, wire types, and values
+- **Connection lifecycle observability** — tracks connection events (connect, disconnect, errors) with active/total counters via tower/hyper integration
+- **Structured logging via `tracing`** — all output goes through the [`tracing`](https://docs.rs/tracing) crate with structured fields for easy filtering and aggregation
+- **Optional OpenTelemetry export** — enable the `opentelemetry` feature flag to forward spans and attributes to your OTel collector
 
-## Planned usage (sketch)
+## Quick Start
+
+Add `tonic-debug` to your `Cargo.toml`:
+
+```toml
+[dependencies]
+tonic-debug = "0.1"
+```
+
+Then add the `DebugLayer` to your tonic server:
+
+```rust,no_run
+use tonic_debug::DebugLayer;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize tracing (e.g. with tracing-subscriber)
+    tracing_subscriber::fmt()
+        .with_env_filter("tonic_debug=debug")
+        .init();
+
+    tonic::transport::Server::builder()
+        .layer(DebugLayer::new())
+        .add_service(/* your gRPC service */)
+        .serve("0.0.0.0:50051".parse()?)
+        .await?;
+
+    Ok(())
+}
+```
+
+## Configuration
+
+Fine-tune what gets logged using the builder API or `DebugConfig`:
 
 ```rust
-use tonic_debug::{DebugLayer, Format};
+use tonic_debug::{DebugLayer, DebugConfig};
 
-Server::builder()
-    .layer(DebugLayer::new()
-        .format(Format::PrettyJson)
-        .max_body_log_bytes(4096))
-    .add_service(my_service)
-    .serve(addr)
-    .await?;
+// Builder API
+let layer = DebugLayer::new()
+    .log_headers(true)
+    .log_bodies(true)
+    .log_response_frames(true)
+    .max_body_bytes(8192)
+    .hex_dump(false);
+
+// Or use DebugConfig directly
+let layer = DebugLayer::with_config(DebugConfig {
+    log_headers: true,
+    log_bodies: true,
+    log_response_frames: true,
+    max_body_bytes: 8192,
+    hex_dump: false,
+});
 ```
+
+| Option               | Default | Description                                        |
+|----------------------|---------|----------------------------------------------------|
+| `log_headers`        | `true`  | Log request/response headers and custom metadata   |
+| `log_bodies`         | `true`  | Log protobuf message contents                      |
+| `log_response_frames`| `true`  | Log individual response body frames as they stream |
+| `max_body_bytes`     | `4096`  | Maximum bytes to capture for body inspection       |
+| `hex_dump`           | `false` | Include hex dump of raw bytes in output            |
+
+## Connection Tracking
+
+Track client connection lifecycle with `ConnectionTrackerLayer`:
+
+```rust
+use tonic_debug::{ConnectionTrackerLayer, ConnectionMetrics};
+
+let metrics = ConnectionMetrics::new();
+let connection_layer = ConnectionTrackerLayer::with_metrics(metrics.clone());
+
+// Query metrics at any time
+println!("Active: {}", metrics.active_connections());
+println!("Total: {}", metrics.total_connections());
+println!("Errors: {}", metrics.connection_errors());
+```
+
+## Protobuf Inspection
+
+The crate decodes raw protobuf wire format without schemas, producing output like:
+
+```text
+gRPC frame (compressed=false, 15 bytes)
+  field 1 (varint): 42
+  field 2 (length-delimited): "hello world"
+```
+
+You can also use the inspection utilities directly:
+
+```rust
+use tonic_debug::inspect;
+
+let data = &[0x08, 0x96, 0x01]; // field 1, varint 150
+if let Some(fields) = inspect::decode_protobuf(data) {
+    for field in &fields {
+        println!("{}", field);
+    }
+}
+```
+
+## Feature Flags
+
+| Feature         | Description                                               |
+|-----------------|-----------------------------------------------------------|
+| `opentelemetry` | Adds OpenTelemetry semantic convention attributes and     |
+|                 | span enrichment via `tracing-opentelemetry`               |
+
+Enable with:
+
+```toml
+[dependencies]
+tonic-debug = { version = "0.1", features = ["opentelemetry"] }
+```
+
+## Log Levels
+
+`tonic-debug` uses the following `tracing` levels:
+
+| Level   | What gets logged                                          |
+|---------|-----------------------------------------------------------|
+| `INFO`  | Request/response summary, connection events               |
+| `WARN`  | Non-OK gRPC status codes                                  |
+| `ERROR` | Connection errors, response body errors                   |
+| `DEBUG` | Headers, custom metadata, response frames, protobuf fields|
+| `TRACE` | Stream completion summaries                               |
+
+## Future Plans
+
+- Web dashboard for live request/response inspection
+- Record/replay mechanism for gRPC calls
+- Request body inspection (buffering inbound streams)
 
 ## License
 
-TBD
+MIT
