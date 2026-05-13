@@ -6,8 +6,8 @@ on:
   push:
     branches:
       - main
-  schedule:
-    - cron: '0 6 * * 1-5'  # run once per day Monday-Friday at 6:00am
+  # schedule:
+    # - cron: '0 6 * * 1-5'  # run once per day Monday-Friday at 6:00am
 
 env:
   RUST_BACKTRACE: 1
