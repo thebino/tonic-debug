@@ -3,6 +3,9 @@
 //! [`DebugLayer`] is the primary entry point for users of this crate. It wraps
 //! any tonic/tower service with request/response inspection and logging.
 
+use std::collections::HashSet;
+
+use http::HeaderName;
 use tower_layer::Layer;
 
 use crate::service::DebugService;
@@ -26,6 +29,10 @@ pub struct DebugConfig {
     pub max_body_bytes: usize,
     /// Include a hex dump of raw bytes in logs.
     pub hex_dump: bool,
+    /// Headers that will be redacted in logs (default: ["authorization"])
+    pub sensitive_headers: HashSet<HeaderName>,
+    /// If true, sensitive headers are logged in full (overrides redaction)
+    pub reveal_sensitive_headers: bool,
 }
 
 impl Default for DebugConfig {
@@ -36,6 +43,8 @@ impl Default for DebugConfig {
             log_response_frames: true,
             max_body_bytes: 4096,
             hex_dump: false,
+            sensitive_headers: HashSet::new(),
+            reveal_sensitive_headers: false,
         }
     }
 }

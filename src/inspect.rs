@@ -89,12 +89,11 @@ impl fmt::Display for ProtoValue {
             ProtoValue::Fixed64(v) => write!(f, "0x{:016x}", v),
             ProtoValue::Bytes(b) => {
                 // Try to display as UTF-8 string first
-                if let Ok(s) = std::str::from_utf8(b) {
-                    if s.chars()
+                if let Ok(s) = std::str::from_utf8(b)
+                    && s.chars()
                         .all(|c| !c.is_control() || c == '\n' || c == '\r' || c == '\t')
-                    {
-                        return write!(f, "\"{}\"", s);
-                    }
+                {
+                    return write!(f, "\"{}\"", s);
                 }
                 // Fall back to hex representation
                 write!(f, "0x")?;

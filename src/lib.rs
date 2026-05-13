@@ -37,6 +37,7 @@
 //!
 //! ```rust
 //! use tonic_debug::{DebugLayer, DebugConfig};
+//! use std::collections::HashSet;
 //!
 //! let layer = DebugLayer::with_config(DebugConfig {
 //!     log_headers: true,
@@ -44,6 +45,8 @@
 //!     log_response_frames: true,
 //!     max_body_bytes: 8192,
 //!     hex_dump: false,
+//!     sensitive_headers: HashSet::new(),
+//!     reveal_sensitive_headers: false,
 //! });
 //! ```
 //!
