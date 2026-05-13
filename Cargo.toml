@@ -2,7 +2,7 @@
 authors = ["Stürmer, Benjamin <benjamin@stuermer.pro>"]
 repository = "https://github.com/tonic-debug"
 name = "tonic-debug"
-version = "0.1.0"
+version = "0.2.0"
 readme = "README.md"
 edition = "2024"
 description = "A debugging and diagnostics middleware for tonic gRPC servers"
