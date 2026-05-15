@@ -85,15 +85,6 @@ where
                     .unwrap_or("unknown");
                 let grpc_timeout = headers.get("grpc-timeout").and_then(|v| v.to_str().ok());
 
-                tracing::debug!(
-                    method = %method,
-                    content_type = content_type,
-                    authority = %authority,
-                    user_agent = user_agent,
-                    grpc_timeout = ?grpc_timeout,
-                    "→ gRPC request headers"
-                );
-
                 // Log custom metadata (headers not starting with standard prefixes)
                 let custom_metadata: Vec<_> = headers
                     .iter()
@@ -108,7 +99,13 @@ where
                             && n != "grpc-accept-encoding"
                     })
                     .map(|(name, value)| {
-                        format!("{}={}", name.as_str(), value.to_str().unwrap_or("<binary>"))
+                        if !config.reveal_sensitive_headers
+                            && config.sensitive_headers.contains(name)
+                        {
+                            format!("{}=[REDACTED]", name.as_str())
+                        } else {
+                            format!("{}={}", name.as_str(), value.to_str().unwrap_or("<binary>"))
+                        }
                     })
                     .collect();
 
@@ -116,8 +113,22 @@ where
                     tracing::debug!(
                         method = %method,
                         metadata = ?custom_metadata,
-                        "→ gRPC custom metadata"
+                        content_type = content_type,
+                        authority = %authority,
+                        user_agent = user_agent,
+                        grpc_timeout = ?grpc_timeout,
+                        "→ gRPC request headers"
                     );
+                } else {
+                    tracing::debug!(
+                        method = %method,
+                        content_type = content_type,
+                        authority = %authority,
+                        user_agent = user_agent,
+                        grpc_timeout = ?grpc_timeout,
+                        "→ gRPC request headers"
+                    );
+
                 }
             }
 

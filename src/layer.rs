@@ -43,7 +43,7 @@ impl Default for DebugConfig {
             log_response_frames: true,
             max_body_bytes: 4096,
             hex_dump: false,
-            sensitive_headers: HashSet::new(),
+            sensitive_headers: HashSet::from([HeaderName::from_static("authorization")]),
             reveal_sensitive_headers: false,
         }
     }
@@ -62,6 +62,18 @@ impl DebugLayer {
     /// Create a new `DebugLayer` with the given configuration.
     pub fn with_config(config: DebugConfig) -> Self {
         Self { config }
+    }
+
+    /// set Headers that will be redacted
+    pub fn sensitive_headers(mut self, sensitive_headers: HashSet<HeaderName>) -> Self {
+        self.config.sensitive_headers = sensitive_headers;
+        self
+    }
+
+    /// Set whether to log request/response headers.
+    pub fn reveal_sensitive_headers(mut self, enabled: bool) -> Self {
+        self.config.reveal_sensitive_headers = enabled;
+        self
     }
 
     /// Set whether to log request/response headers.
