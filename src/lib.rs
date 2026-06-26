@@ -42,6 +42,7 @@
 //! let layer = DebugLayer::with_config(DebugConfig {
 //!     log_headers: true,
 //!     log_bodies: true,
+//!     log_request_frames: true,
 //!     log_response_frames: true,
 //!     max_body_bytes: 8192,
 //!     hex_dump: false,
@@ -94,6 +95,7 @@ mod tests {
         let layer = DebugLayer::new()
             .log_headers(false)
             .log_bodies(true)
+            .log_request_frames(false)
             .log_response_frames(false)
             .max_body_bytes(1024)
             .hex_dump(true);
@@ -105,6 +107,7 @@ mod tests {
         let config = DebugConfig::default();
         assert!(config.log_headers);
         assert!(config.log_bodies);
+        assert!(config.log_request_frames);
         assert!(config.log_response_frames);
         assert_eq!(config.max_body_bytes, 4096);
         assert!(!config.hex_dump);

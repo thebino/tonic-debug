@@ -13,7 +13,7 @@ use std::{
 };
 use tower_service::Service;
 
-use crate::body::DebugBody;
+use crate::body::{DebugBody, Direction};
 use crate::layer::DebugConfig;
 
 /// A Tower service that intercepts and logs gRPC requests and responses.
@@ -32,7 +32,7 @@ impl<S> DebugService<S> {
 
 impl<S, ReqBody, ResBody> Service<Request<ReqBody>> for DebugService<S>
 where
-    S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
+    S: Service<Request<DebugBody<ReqBody>>, Response = Response<ResBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
     S::Error: std::fmt::Display + Send + 'static,
     ReqBody: HttpBody<Data = Bytes> + Send + 'static,
@@ -68,7 +68,8 @@ where
                 "→ gRPC request"
             );
 
-            if config.log_headers {
+            // Skip the (allocating) header formatting entirely when DEBUG is disabled.
+            if config.log_headers && tracing::enabled!(tracing::Level::DEBUG) {
                 let headers = req.headers();
                 let content_type = headers
                     .get("content-type")
@@ -109,28 +110,30 @@ where
                     })
                     .collect();
 
-                if !custom_metadata.is_empty() {
-                    tracing::debug!(
-                        method = %method,
-                        metadata = ?custom_metadata,
-                        content_type = content_type,
-                        authority = %authority,
-                        user_agent = user_agent,
-                        grpc_timeout = ?grpc_timeout,
-                        "→ gRPC request headers"
-                    );
-                } else {
-                    tracing::debug!(
-                        method = %method,
-                        content_type = content_type,
-                        authority = %authority,
-                        user_agent = user_agent,
-                        grpc_timeout = ?grpc_timeout,
-                        "→ gRPC request headers"
-                    );
-
-                }
+                tracing::debug!(
+                    method = %method,
+                    metadata = ?custom_metadata,
+                    content_type = content_type,
+                    authority = %authority,
+                    user_agent = user_agent,
+                    grpc_timeout = ?grpc_timeout,
+                    "→ gRPC request headers"
+                );
             }
+
+            // Wrap the request body so inbound frames are inspected as the inner
+            // service reads them.
+            let (parts, body) = req.into_parts();
+            let req_body = DebugBody::new(
+                body,
+                method.clone(),
+                Direction::Request,
+                config.log_bodies,
+                config.log_request_frames,
+                config.hex_dump,
+                config.max_body_bytes,
+            );
+            let req = Request::from_parts(parts, req_body);
 
             // Call the inner service
             let response = inner.call(req).await;
@@ -193,7 +196,10 @@ where
                     let debug_body = DebugBody::new(
                         body,
                         method,
+                        Direction::Response,
+                        config.log_bodies,
                         config.log_response_frames,
+                        config.hex_dump,
                         config.max_body_bytes,
                     );
                     Ok(Response::from_parts(parts, debug_body))
