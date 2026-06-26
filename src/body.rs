@@ -1,7 +1,7 @@
-//! Response body wrapper for capturing gRPC response data.
+//! Request/response body wrapper for capturing gRPC body data.
 //!
-//! Wraps the inner HTTP response body so that frames can be inspected
-//! and logged as they stream through the middleware.
+//! Wraps an inner HTTP body so that frames can be inspected and logged as
+//! they stream through the middleware, in either direction.
 
 use bytes::Bytes;
 use http_body::Frame;
@@ -14,13 +14,39 @@ use tracing;
 
 use crate::inspect;
 
+/// Which side of the call a [`DebugBody`] is wrapping, used to label log output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    /// An inbound request body being read by the inner service.
+    Request,
+    /// An outbound response body being streamed back to the caller.
+    Response,
+}
+
+impl Direction {
+    /// Lowercase label used in log messages ("request" / "response").
+    fn as_str(self) -> &'static str {
+        match self {
+            Direction::Request => "request",
+            Direction::Response => "response",
+        }
+    }
+}
+
 pin_project! {
-    /// A wrapper around an HTTP response body that logs gRPC frames as they are streamed.
+    /// A wrapper around an HTTP body that logs gRPC frames as they are streamed.
     pub struct DebugBody<B> {
         #[pin]
         inner: B,
         method: String,
+        // Which direction this body flows, for log labelling.
+        direction: Direction,
+        // Master switch: inspect body contents at all (maps to `DebugConfig::log_bodies`).
         log_body: bool,
+        // Log each streamed frame as it passes.
+        log_frames: bool,
+        // Render captured bytes as a hex dump instead of decoded protobuf.
+        hex_dump: bool,
         max_capture_bytes: usize,
         captured: Vec<u8>,
     }
@@ -28,11 +54,22 @@ pin_project! {
 
 impl<B> DebugBody<B> {
     /// Create a new `DebugBody` wrapping the given body.
-    pub fn new(inner: B, method: String, log_body: bool, max_capture_bytes: usize) -> Self {
+    pub fn new(
+        inner: B,
+        method: String,
+        direction: Direction,
+        log_body: bool,
+        log_frames: bool,
+        hex_dump: bool,
+        max_capture_bytes: usize,
+    ) -> Self {
         Self {
             inner,
             method,
+            direction,
             log_body,
+            log_frames,
+            hex_dump,
             max_capture_bytes,
             captured: Vec::new(),
         }
@@ -52,6 +89,7 @@ where
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let this = self.project();
+        let dir = this.direction.as_str();
 
         match this.inner.poll_frame(cx) {
             Poll::Ready(Some(Ok(frame))) => {
@@ -63,13 +101,21 @@ where
                         let to_capture = bytes.len().min(remaining);
                         this.captured.extend_from_slice(&bytes[..to_capture]);
 
-                        let formatted = inspect::format_grpc_message(bytes);
-                        tracing::debug!(
-                            method = %this.method,
-                            frame_size = bytes.len(),
-                            "gRPC response frame:\n{}",
-                            formatted
-                        );
+                        if *this.log_frames {
+                            let formatted = if *this.hex_dump {
+                                inspect::hex_dump(bytes, *this.max_capture_bytes)
+                            } else {
+                                inspect::format_grpc_message(bytes)
+                            };
+                            tracing::debug!(
+                                method = %this.method,
+                                direction = dir,
+                                frame_size = bytes.len(),
+                                "gRPC {} frame:\n{}",
+                                dir,
+                                formatted
+                            );
+                        }
                     }
 
                     if let Some(trailers) = frame.trailers_ref() {
@@ -85,15 +131,19 @@ where
                         if grpc_status != "0" {
                             tracing::warn!(
                                 method = %this.method,
+                                direction = dir,
                                 grpc_status = grpc_status,
                                 grpc_message = grpc_message,
-                                "gRPC response trailers indicate error"
+                                "gRPC {} trailers indicate error",
+                                dir
                             );
                         } else {
                             tracing::debug!(
                                 method = %this.method,
+                                direction = dir,
                                 grpc_status = grpc_status,
-                                "gRPC response trailers OK"
+                                "gRPC {} trailers OK",
+                                dir
                             );
                         }
                     }
@@ -103,8 +153,10 @@ where
             Poll::Ready(Some(Err(e))) => {
                 tracing::error!(
                     method = %this.method,
+                    direction = dir,
                     error = %e,
-                    "gRPC response body error"
+                    "gRPC {} body error",
+                    dir
                 );
                 Poll::Ready(Some(Err(e)))
             }
@@ -112,8 +164,10 @@ where
                 if *this.log_body && !this.captured.is_empty() {
                     tracing::trace!(
                         method = %this.method,
-                        total_response_bytes = this.captured.len(),
-                        "gRPC response stream completed"
+                        direction = dir,
+                        total_bytes = this.captured.len(),
+                        "gRPC {} stream completed",
+                        dir
                     );
                 }
                 Poll::Ready(None)

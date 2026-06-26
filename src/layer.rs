@@ -23,6 +23,8 @@ pub struct DebugConfig {
     pub log_headers: bool,
     /// Log request and response bodies (protobuf inspection).
     pub log_bodies: bool,
+    /// Log individual request body frames as they stream.
+    pub log_request_frames: bool,
     /// Log individual response body frames as they stream.
     pub log_response_frames: bool,
     /// Maximum number of bytes to capture for body inspection.
@@ -40,6 +42,7 @@ impl Default for DebugConfig {
         Self {
             log_headers: true,
             log_bodies: true,
+            log_request_frames: true,
             log_response_frames: true,
             max_body_bytes: 4096,
             hex_dump: false,
@@ -85,6 +88,12 @@ impl DebugLayer {
     /// Set whether to log request/response bodies.
     pub fn log_bodies(mut self, enabled: bool) -> Self {
         self.config.log_bodies = enabled;
+        self
+    }
+
+    /// Set whether to log individual request body frames.
+    pub fn log_request_frames(mut self, enabled: bool) -> Self {
+        self.config.log_request_frames = enabled;
         self
     }
 
